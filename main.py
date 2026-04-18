@@ -7,7 +7,7 @@ from brain.embedder import embed_chunks, find_relevant_chunks
 from brain.ollama import brain_think, check_ollama_connection
 
 app = FastAPI(
-    title="Theduvaan",
+    title="Kural",
     description="Thinnu eats the web. Brain understands it. You ask anything.",
     version="2.0.0"
 )
@@ -32,7 +32,7 @@ class AskRequest(BaseModel):
 @app.get("/")
 def root():
     return {
-        "name": "Theduvaan 🔍",
+        "name": "Kural 🔍",
         "tagline": "Thinnu eats. Brain thinks. You ask.",
         "version": "2.0.0",
         "architecture": "RAG (Retrieval Augmented Generation)",
