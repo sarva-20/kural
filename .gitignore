@@ -16,3 +16,12 @@ ms-playwright/
 
 # OS junk
 .DS_Store
+
+kural-adapter/
+dataset.jsonl
+test_inference.py
+check_token.py
+push_to_hub.py
+unsloth_compiled_cache/
+*.pyc
+__pycache__/
