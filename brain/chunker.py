@@ -1,4 +1,4 @@
-def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
+def chunk_text(text: str, chunk_size: int = 200, overlap: int = 20) -> list[str]:
     """
     Splits text into overlapping chunks.
 
@@ -31,12 +31,11 @@ def chunk_scraped_data(data: dict) -> list[str]:
     """
     all_chunks = []
 
-    # --- Page identity (always one chunk, small) ---
     identity = f"Page Title: {data['title']}\nURL: {data['url']}"
     if data["meta"]:
         meta_str = "\n".join([f"{k}: {v}" for k, v in data["meta"].items()])
         identity += f"\nMeta:\n{meta_str}"
-    all_chunks.append(identity)
+    all_chunks.append(identity[:800])  # cap at 800 chars
 
     # --- Headings (one chunk, gives structural overview) ---
     if data["headings"]:
@@ -50,11 +49,12 @@ def chunk_scraped_data(data: dict) -> list[str]:
         text_chunks = chunk_text(data["visible_text"], chunk_size=200, overlap=20)
         all_chunks.extend(text_chunks)
 
-    # --- Links (one chunk, capped at 100) ---
+    # --- Links (one chunk, capped at 50 and 1000 chars) ---
     if data["links"]:
         links_str = "\n".join(
-            [f"- {l['text']} -> {l['href']}" for l in data["links"][:100]]
+            [f"- {l['text']} -> {l['href']}" for l in data["links"][:50]]
         )
+        links_str = links_str[:1000]  # hard cap at 1000 chars
         all_chunks.append(f"Links on page:\n{links_str}")
 
     # --- Images (one chunk) ---

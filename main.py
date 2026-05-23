@@ -1,3 +1,4 @@
+
 import uuid
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -141,7 +142,7 @@ async def ask(req: AskRequest):
         relevant_chunks = await find_relevant_chunks(
             question=req.question,
             embedded_chunks=embedded_chunks,
-            top_k=5
+            top_k=8
         )
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Embedder failed: {str(e)}")

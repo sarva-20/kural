@@ -1,44 +1,43 @@
 import asyncio
-from playwright.async_api import async_playwright
+import sys
+import threading
+from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 
 
-async def thinnu_eat(url: str) -> dict:
+def thinnu_eat_sync(url: str) -> dict:
     """
-    Thinnu sees a URL.
-    Thinnu eats the URL.
-    Thinnu leaves nothing behind.
+    Synchronous version using sync_playwright.
+    Runs in a separate thread to avoid event loop conflicts on Windows.
     """
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
+        page.goto(url, wait_until="domcontentloaded", timeout=30000)
 
-        # Go to the page, wait for all network calls to settle
-        await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        # Scroll to trigger lazy loading
+        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        import time
+        time.sleep(1)
+        page.evaluate("window.scrollTo(0, 0)")
+        time.sleep(2)
 
-# Scroll down to trigger lazy-loaded content
-        await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-        await asyncio.sleep(1)
-        await page.evaluate("window.scrollTo(0, 0)")
-        await asyncio.sleep(2)  # let JS finish its drama
-
-        html = await page.content()
-        title = await page.title()
+        html = page.content()
+        title = page.title()
         final_url = page.url
 
-        await browser.close()
+        browser.close()
 
     soup = BeautifulSoup(html, "lxml")
 
-    # --- Strip noise ---
+    # Strip noise
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
 
-    # --- Visible text ---
     visible_text = soup.get_text(separator="\n", strip=True)
 
-    # --- Meta tags ---
+    # Meta tags
     meta = {}
     for tag in soup.find_all("meta"):
         name = tag.get("name") or tag.get("property") or tag.get("http-equiv")
@@ -46,18 +45,18 @@ async def thinnu_eat(url: str) -> dict:
         if name and content:
             meta[name] = content
 
-    # --- Headings ---
+    # Headings
     headings = []
     for level in ["h1", "h2", "h3", "h4", "h5", "h6"]:
         for h in soup.find_all(level):
             headings.append({"level": level, "text": h.get_text(strip=True)})
 
-    # --- Links ---
+    # Links
     links = []
     for a in soup.find_all("a", href=True):
         links.append({"text": a.get_text(strip=True), "href": a["href"]})
 
-    # --- Images ---
+    # Images
     images = []
     for img in soup.find_all("img"):
         images.append({
@@ -66,7 +65,7 @@ async def thinnu_eat(url: str) -> dict:
             "title": img.get("title", "")
         })
 
-    # --- Tables ---
+    # Tables
     tables = []
     for table in soup.find_all("table"):
         rows = []
@@ -77,7 +76,7 @@ async def thinnu_eat(url: str) -> dict:
         if rows:
             tables.append(rows)
 
-    # --- Forms ---
+    # Forms
     forms = []
     for form in soup.find_all("form"):
         fields = []
@@ -95,7 +94,6 @@ async def thinnu_eat(url: str) -> dict:
             "fields": fields
         })
 
-    # --- Raw HTML (capped) ---
     raw_html = html[:50000]
 
     return {
@@ -110,3 +108,13 @@ async def thinnu_eat(url: str) -> dict:
         "forms": forms,
         "raw_html": raw_html
     }
+
+
+async def thinnu_eat(url: str) -> dict:
+    """
+    Async wrapper that runs sync Playwright in a thread pool.
+    This is the correct way to use Playwright on Windows with asyncio.
+    """
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, thinnu_eat_sync, url)
+    return result

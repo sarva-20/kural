@@ -27,22 +27,20 @@ async def embed_text(text: str) -> list[float]:
 
 
 async def embed_chunks(chunks: list[str]) -> list[dict]:
-    """
-    Embeds every chunk and returns them paired with their vectors.
-    
-    Result structure:
-    [
-        {"text": "chunk content...", "embedding": [0.1, 0.2, ...]},
-        ...
-    ]
-    """
     embedded = []
-    for chunk in chunks:
-        embedding = await embed_text(chunk)
-        embedded.append({
-            "text": chunk,
-            "embedding": embedding
-        })
+    for i, chunk in enumerate(chunks):
+        try:
+            embedding = await embed_text(chunk)
+            embedded.append({
+                "text": chunk,
+                "embedding": embedding
+            })
+        except Exception as e:
+            print(f"  ✗ Chunk {i} failed ({len(chunk)} chars): {str(e)[:80]}")
+            print(f"    Preview: {chunk[:100]}")
+            # Skip failed chunks instead of crashing
+            continue
+    print(f"  ✓ Embedded {len(embedded)} chunks successfully")
     return embedded
 
 
