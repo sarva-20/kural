@@ -5,6 +5,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from thinnu.scraper import thinnu_eat
+from thinnu.crawler import crawl_site
 from brain.chunker import chunk_scraped_data
 from brain.embedder import embed_chunks, find_relevant_chunks
 from brain.ollama import (
@@ -35,6 +36,12 @@ sessions: dict[str, dict] = {}
 
 class ScrapeRequest(BaseModel):
     url: str
+
+
+class CrawlRequest(BaseModel):
+    url: str
+    max_pages: int = 10
+    max_depth: int = 2
 
 
 class AskRequest(BaseModel):
@@ -135,6 +142,77 @@ async def scrape(req: ScrapeRequest):
             "raw_html_chars": len(data["raw_html"]),  # stored but not embedded
             "total_chunks": len(embedded_chunks),
         },
+    }
+
+
+@app.post("/crawl")
+async def crawl(req: CrawlRequest):
+    """
+    Multi-page BFS crawler.
+    Scrapes entire site up to max_pages and max_depth.
+    All pages embedded into one unified session.
+    """
+    # Validate limits
+    if req.max_pages > 50:
+        raise HTTPException(status_code=400, detail="max_pages cannot exceed 50.")
+    if req.max_depth > 3:
+        raise HTTPException(status_code=400, detail="max_depth cannot exceed 3.")
+
+    # Step 1 — Crawl
+    try:
+        pages = await crawl_site(req.url, req.max_pages, req.max_depth)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Crawler failed: {str(e)}")
+
+    if not pages:
+        raise HTTPException(status_code=400, detail="No pages scraped successfully.")
+
+    # Step 2 — Chunk all pages together
+    all_chunks_raw = []
+    for page in pages:
+        page_chunks = chunk_scraped_data(page)
+        # Prefix each chunk with page title for context
+        for chunk in page_chunks:
+            all_chunks_raw.append(f"[From: {page['title']}]\n{chunk}")
+
+    # Step 3 — Embed all chunks
+    try:
+        embedded_chunks = await embed_chunks(all_chunks_raw)
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Embedding failed: {str(e)}"
+        )
+
+    # Step 4 — Store session
+    session_id = str(uuid.uuid4())
+    sessions[session_id] = {
+        "data": {
+            "url": req.url,
+            "title": f"Crawl of {req.url}",
+            "pages_scraped": [p["url"] for p in pages],
+            "visible_text": "",
+            "meta": {},
+            "headings": [],
+            "links": [],
+            "images": [],
+            "tables": [],
+            "forms": [],
+            "raw_html": ""
+        },
+        "embedded_chunks": embedded_chunks,
+        "history": []
+    }
+
+    return {
+        "session_id": session_id,
+        "base_url": req.url,
+        "message": f"Crawled {len(pages)} pages. Ask anything across all of them.",
+        "pages_scraped": [{"url": p["url"], "title": p["title"]} for p in pages],
+        "stats": {
+            "pages": len(pages),
+            "total_chunks": len(embedded_chunks)
+        }
     }
 
 
